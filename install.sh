@@ -3,12 +3,13 @@
 #   cargo build --release && pkexec "$PWD/install.sh"
 set -eu
 cd "$(dirname "$0")"
-for b in vfc vfcd vfc-gui; do
+for b in vfc vfcd vfc-gui fan-control; do
 	[ -x target/release/$b ] || { echo "target/release/$b missing: run cargo build --release first" >&2; exit 1; }
 done
-install -m 0755 target/release/vfc target/release/vfcd target/release/vfc-gui /usr/local/bin/
+install -m 0755 target/release/vfc target/release/vfcd target/release/vfc-gui target/release/fan-control /usr/local/bin/
 install -m 0644 packaging/vfcd.service /etc/systemd/system/vfcd.service
 install -Dm 0644 packaging/vfc-gui.desktop /usr/local/share/applications/vfc-gui.desktop
+install -Dm 0644 packaging/fan-control.desktop /usr/local/share/applications/fan-control.desktop
 echo acpi_call > /etc/modules-load.d/acpi_call.conf
 # A vfcd started by hand (testing) would fight the service over the socket.
 pkill -x vfcd && sleep 3 || true

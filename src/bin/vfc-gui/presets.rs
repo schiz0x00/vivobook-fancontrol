@@ -3,39 +3,28 @@
 use std::fs;
 use std::path::PathBuf;
 
+use vfc::modes::Mode;
 use vfc::proto::Control;
-use vfc::tables::{CurvePoint, FanMode, MAX_RPM};
-
-fn curve(points: &[(u8, u32)], hysteresis: u8) -> [FanMode; 2] {
-    std::array::from_fn(|fan| FanMode::Curve {
-        points: points
-            .iter()
-            .map(|&(temp, rpm)| CurvePoint { temp, rpm: rpm.min(MAX_RPM[fan]) })
-            .collect(),
-        hysteresis,
-    })
-}
 
 fn builtins() -> Vec<(String, Control)> {
     vec![
-        ("Stock (firmware)".into(), Control::default()),
-        (
-            "Silent".into(),
-            Control { fans: curve(&[(60, 1100), (70, 1400), (78, 1800), (85, 2200), (92, 3200)], 5) },
-        ),
-        (
-            "Balanced".into(),
-            Control { fans: curve(&[(50, 1200), (60, 1500), (68, 1800), (75, 2100), (82, 2400), (88, 3200)], 4) },
-        ),
-        (
-            "Cool".into(),
-            Control { fans: curve(&[(0, 1200), (50, 1600), (60, 2000), (70, 2400), (78, 3200)], 3) },
-        ),
-        (
-            "Full speed".into(),
-            Control { fans: std::array::from_fn(|fan| FanMode::Fixed { rpm: MAX_RPM[fan] }) },
-        ),
+        ("Stock (firmware)".into(), Mode::Normal.control()),
+        ("Silent".into(), Mode::Quiet.control()),
+        ("Balanced".into(), balanced()),
+        ("Cool".into(), Mode::Cool.control()),
+        ("Full speed".into(), Mode::Max.control()),
     ]
+}
+
+fn balanced() -> Control {
+    use vfc::tables::{CurvePoint, FanMode, MAX_RPM};
+    let points = [(50, 1200), (60, 1500), (68, 1800), (75, 2100), (82, 2400), (88, 3200)];
+    Control {
+        fans: std::array::from_fn(|fan| FanMode::Curve {
+            points: points.iter().map(|&(temp, rpm)| CurvePoint { temp, rpm: rpm.min(MAX_RPM[fan]) }).collect(),
+            hysteresis: 4,
+        }),
+    }
 }
 
 pub struct Presets {

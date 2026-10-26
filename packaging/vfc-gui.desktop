@@ -1,9 +1,10 @@
 [Desktop Entry]
 Type=Application
-Name=Vivobook Fan Control
+Name=Fan Control (advanced)
 Comment=Fan curves, fixed speeds and EC tables for the ASUS Vivobook Pro 15
 Exec=/usr/local/bin/vfc-gui
 Icon=preferences-system-power
 Categories=System;Settings;HardwareSettings;
 Keywords=fan;temperature;ec;asus;
 StartupWMClass=vfc-gui
+NoDisplay=true

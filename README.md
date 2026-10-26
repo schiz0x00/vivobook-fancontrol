@@ -15,7 +15,10 @@ the firmware's own EC mailbox methods (`RRAM`/`WRAM` via `acpi_call`).
   re-applies within ~3 s), applies a temperature guard (custom fans go to
   full speed at 95 °C until < 80 °C, configurable), restores the stock tables
   when stopped, and serves a socket (`/run/vfcd.sock`, group `sudo`).
-- **vfc-gui** — desktop app:
+- **fan-control** — the simple app ("Fan Control" in the app menu): the
+  temperature and four big buttons — Quiet, Normal (factory), Cool, Max.
+  A click applies the mode and keeps it after a restart.
+- **vfc-gui** — the advanced app (not in the menu; run `vfc-gui`):
   - Dashboard: live RPM / target / level / duty per fan, CPU + EC temps,
     10-minute graphs.
   - Fan control: per fan *Stock*, *Fixed speed* (incl. off) or *Curve*

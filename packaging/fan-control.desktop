@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Fan Control
+Comment=Make the laptop quieter or cooler
+Exec=/usr/local/bin/fan-control
+Icon=preferences-system-power
+Categories=System;Settings;HardwareSettings;
+Keywords=fan;temperature;quiet;cool;noise;
+StartupWMClass=fan-control
