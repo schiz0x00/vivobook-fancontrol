@@ -1,8 +1,8 @@
 //! vfc — Vivobook fan control research tool.
 
-mod acpi_call;
-mod dsdt;
-mod ec;
+use vfc::proto::{Client, Request, Response};
+use vfc::tables::FanMode;
+use vfc::{acpi_call, dsdt, ec};
 
 use std::fs;
 use std::path::PathBuf;
@@ -64,6 +64,15 @@ enum Cmd {
     },
     /// Make the firmware rewrite all fan tables (toggle platform_profile)
     Restore,
+    /// Daemon status (fans, temps, control)
+    Status,
+    /// Set a fan through vfcd: RPM, "off" or "stock"
+    Set {
+        /// 0, 1 or "all"
+        fan: String,
+        /// RPM, "off" or "stock"
+        speed: String,
+    },
     /// Show bytes that differ between raw scans, with 16-bit LE values
     Diff {
         /// Scans to compare (dumps/NAME.bin or paths)
@@ -169,6 +178,8 @@ fn main() -> Result<()> {
             println!("wrote {} ({failed} unreadable addresses)", path.display());
         }
         Cmd::Diff { scans, start } => diff(&scans, start)?,
+        Cmd::Status => status()?,
+        Cmd::Set { fan, speed } => set(&fan, &speed)?,
         Cmd::Write { addr, value, word } => {
             require_acpi_call()?;
             if word {
@@ -213,5 +224,55 @@ fn main() -> Result<()> {
             println!("wrote {}", path.display());
         }
     }
+    Ok(())
+}
+
+fn daemon_status(c: &mut Client) -> Result<vfc::proto::Status> {
+    match c.request(&Request::Status)? {
+        Response::Status(s) => Ok(*s),
+        r => bail!("unexpected reply {r:?}"),
+    }
+}
+
+fn status() -> Result<()> {
+    let st = daemon_status(&mut Client::connect()?)?;
+    if let Some(t) = st.cpu_temp {
+        println!("cpu      {t:.0} °C   profile {}", st.profile);
+    }
+    for (fan, f) in st.fans.iter().enumerate() {
+        println!(
+            "fan{fan}     {:4} rpm  target {:>4}  level {:2}  ec temp {} °C  [{}]",
+            f.rpm,
+            f.target_rpm.map_or("-".into(), |t| t.to_string()),
+            f.level,
+            f.temp,
+            st.control.fans[fan].label()
+        );
+    }
+    if st.guard_active {
+        println!("GUARD ACTIVE: custom fans at full speed");
+    }
+    Ok(())
+}
+
+fn set(fan: &str, speed: &str) -> Result<()> {
+    let fans: &[usize] = match fan {
+        "0" => &[0],
+        "1" => &[1],
+        "all" | "both" => &[0, 1],
+        _ => bail!("fan must be 0, 1 or all"),
+    };
+    let mode = match speed {
+        "stock" | "auto" => FanMode::Stock,
+        "off" => FanMode::Fixed { rpm: 0 },
+        n => FanMode::Fixed { rpm: n.parse().context("speed must be RPM, off or stock")? },
+    };
+    let mut c = Client::connect()?;
+    let mut control = daemon_status(&mut c)?.control;
+    for &f in fans {
+        control.fans[f] = mode.clone();
+    }
+    c.request(&Request::SetControl(control))?;
+    println!("ok: {}", mode.label());
     Ok(())
 }

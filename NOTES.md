@@ -190,3 +190,31 @@ Next tests:
    0x05C2-0x05C5, tach; correlate with profile + load.
 3. Write phase: modify one table entry, observe; then build a small hwmon /
    fan-curve tool.
+
+## Daemon-era findings (2026-10-26, via vfcd)
+
+8. **Thresholds of 0 are invalid.** Fixed mode with up = down = 0: level fell
+   to 0 on every temperature *decrease*, then jumped back to 13 on the next
+   increase (fans coasting down in between). Up row 0 is never passed; with
+   up 20/30 and 0x0A20 row = 0 the same 13 <-> 0 flapping happened. With up 30
+   and 0x0A20 = 25 the level held at 13 for 60+ s while temps fell 39 -> 36,
+   both fans within 1% of target. -> no 0 in up or 0x0A20 rows.
+9. **Row 0x0A10 (fan1 0x0A50) is the hysteresis, 0x0A20 is not the drop
+   threshold.** Curve 30/38/45 °C, 0x0A20 = up (hyst 0): level 3 held at 36 °C.
+   Moving point 3 to 50 °C: dropped to level 2 at 37 °C (~30 s later) and held
+   there although 37 < 38. Fits: level L drops when temp < up[L-1] - 0x0A10[L-1]
+   (45-10 = 35 holds at 36; 50-10 = 40 drops; 38-10 = 28 holds). Writing the
+   hysteresis into 0x0A10 (3) settled the same curve at level 2 at 36-37 °C
+   within seconds, 1611-1619 rpm for a 1600 target. Drops can lag 20-30 s
+   (row 0x0A30 = 9, 2, 2.. may be the delay). 0x0A20's meaning is still open
+   (stock: 53..61, below up - hyst).
+10. **Fan1 stops at level 0** (and at duty 0 / target 0): fixed 0 rpm coasted
+    1259 -> 0 in ~25 s and stayed there.
+11. Fixed 1300/1600/2000 rpm held within ~1% (fan0 1305-1312, fan1 1288-1297
+    for 1300). Starting from a running fan, the EC reached a new target in
+    3-6 s; the ~100 rpm/3 s ramp seen earlier was from standstill.
+12. EC reads through acpi_call: ~1.2-1.3 ms per byte (256-byte table ~0.3 s).
+
+Encoding used by vfcd (src/tables.rs): fixed = up 20 / hyst 10 / low 10 on
+all levels; curve point k -> up[k] = max(temp, 20), hyst[k] = hysteresis,
+low[k] = up - hyst; unused levels up/low = 255 and repeat the last speed.

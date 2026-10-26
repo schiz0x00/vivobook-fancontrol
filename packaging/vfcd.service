@@ -1,0 +1,12 @@
+[Unit]
+Description=Vivobook fan control daemon (EC fan tables)
+After=systemd-modules-load.service
+
+[Service]
+ExecStartPre=-/sbin/modprobe acpi_call
+ExecStart=/usr/local/bin/vfcd
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

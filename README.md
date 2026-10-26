@@ -1,33 +1,56 @@
 # vivobook-fancontrol
 
-Custom fan curves for the ASUS Vivobook Pro 15 (N6506MU) on Linux.
+Custom fan control for the ASUS Vivobook Pro 15 (N6506MU) on Linux, with
+Secure Boot left on.
 
-The firmware only exposes three thermal profiles (quiet / balanced /
-performance). Under the hood, each profile switch makes ACPI write a set of
-fan tables into EC RAM. This project reverse-engineers those tables and writes
-its own, through the firmware's own EC mailbox methods, with Secure Boot left on.
+The firmware only exposes three thermal profiles. Under the hood, each
+profile switch makes ACPI write fan tables into EC RAM; this project
+reverse-engineered those tables (see `NOTES.md`) and writes its own through
+the firmware's own EC mailbox methods (`RRAM`/`WRAM` via `acpi_call`).
 
-Status: **research** — both fans controllable live by writing EC table entries (tach target = setpoint); curve semantics mostly mapped, no daemon yet.
+## What you get
 
-## Layout
+- **vfcd** — root daemon. Owns all EC writes, keeps your fan settings in
+  place (the firmware rewrites the tables on every profile switch; vfcd
+  re-applies within ~3 s), applies a temperature guard (custom fans go to
+  full speed at 95 °C until < 80 °C, configurable), restores the stock tables
+  when stopped, and serves a socket (`/run/vfcd.sock`, group `sudo`).
+- **vfc-gui** — desktop app:
+  - Dashboard: live RPM / target / level / duty per fan, CPU + EC temps,
+    10-minute graphs.
+  - Fan control: per fan *Stock*, *Fixed speed* (incl. off) or *Curve*
+    (drag points on the graph, up to 13), hysteresis, presets, "use at boot".
+  - EC tables: decoded per-level editor + raw hex editor for 0x0A00–0x0AFF.
+  - EC explorer: read any EC RAM range, live refresh, change highlighting.
+  - System: platform profile, temperature guard, battery charge limit,
+    dGPU power (via `dgpu-power`).
+  - Log: daemon events (firmware resets, guard trips, errors).
+  - `vfc-gui control|tables|explorer|system|log` opens on that tab.
+- **vfc** — CLI: `vfc status`, `vfc set 0|1|all <rpm|off|stock>`, plus the
+  research commands (`read`, `tables`, `scan`, `diff`, `extract`, ...).
 
-- `NOTES.md` — findings: EC mailbox protocol, fan readout, profile switch, table layout
-- `acpi/tables/` — raw ACPI tables from `/sys/firmware/acpi/tables` + `iasl -d` output
-- `src/` — `vfc`, a Rust CLI: `extract` (DSDT tables), `read`/`fans`/`tables`/`snapshot`/`scan`/`diff` (EC reads), `write`/`apply`/`restore` (table writes, guarded) via acpi_call
-- `dumps/` — live EC RAM dumps (per profile / load)
+## Install
 
-## Approach
+```sh
+cargo build --release
+pkexec "$PWD/install.sh"   # binaries -> /usr/local/bin, enables vfcd.service
+```
 
-1. `acpi_call` (DKMS, signed with a local MOK) to call `\_SB.PC00.LPCB.EC0.RRAM`,
-   `WRAM` and `FS_C` from userspace. Lockdown allows signed modules.
-2. Read-only: dump EC RAM 0x0A00–0x0AFF and live fan state while switching
-   profiles and loading the CPU, to confirm what each table row means.
-3. Write: tweak one entry, observe, then build a proper fan-curve tool
-   (ideally a small hwmon driver exposing `fan*_input` / `pwm*_auto_point*`).
+Needs the `acpi_call` DKMS module signed with an enrolled MOK (Secure Boot /
+lockdown). The installer adds it to `/etc/modules-load.d`.
 
 ## Safety
 
-- Never write EC RAM outside the ranges the firmware itself writes.
-- Restore a profile via `platform_profile` to make the firmware rewrite all
-  tables from scratch if anything looks off.
-- CPU thermal throttling and the EC's own shutdown stay in place regardless.
+- Writes are limited to the fan table block the firmware itself writes
+  (0x0A00–0x0AFF) plus the profile mode code; every write is read back.
+- The guard overrides custom modes at high temperature; stock fans are never
+  touched. CPU thermal throttling and the EC's own shutdown stay in place.
+- "⟲ Stock" (GUI), `vfc set all stock`, or stopping vfcd brings back the
+  firmware tables (via a platform_profile switch).
+
+## Layout
+
+- `src/tables.rs` — table layout + encoding of fixed speeds and curves
+- `src/bin/vfcd.rs` — daemon; `src/proto.rs` — socket protocol
+- `src/bin/vfc-gui/` — egui app; `src/main.rs` — CLI
+- `NOTES.md` — findings; `acpi/tables/` — ACPI dumps; `dumps/` — EC dumps

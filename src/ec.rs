@@ -22,6 +22,11 @@ pub const TACH: [u16; 2] = [0x03E8, 0x03EA];
 /// FS_C's constant: RPM = 0x1C8402 / (2 * tach).
 const RPM_K: u64 = 0x1C8402 / 2;
 
+/// Current level (0-13) per fan.
+pub const LEVEL: [u16; 2] = [0x03EC, 0x03ED];
+/// EC control temperature (°C) per fan.
+pub const CTL_TEMP: [u16; 2] = [0x0576, 0x0577];
+
 /// EC RAM registers ACPI reads or writes around fan control (see NOTES.md).
 pub const FAN_REGS: &[(&str, u16)] = &[
     ("fan0 level  ", 0x03EC),
@@ -166,4 +171,9 @@ pub fn fans() -> Result<String> {
         writeln!(out, "{name}: {:3}  (0x{addr:04X})", rram(*addr)?)?;
     }
     Ok(out)
+}
+
+/// Read a range, failing on the first address the EC doesn't answer.
+pub fn read_block(start: u16, len: u16) -> Result<Vec<u8>> {
+    (start..start + len).map(rram).collect()
 }

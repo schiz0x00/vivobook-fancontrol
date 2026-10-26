@@ -2,6 +2,7 @@
 
 use std::fs;
 use std::path::Path;
+use std::sync::Mutex;
 
 use anyhow::{Context, Result, bail};
 
@@ -17,6 +18,10 @@ pub fn available() -> bool {
 /// Evaluate an ACPI method, e.g. `\_SB.PC00.LPCB.EC0.RRAM 0x0a00`.
 /// Only integer results are supported, which is all the EC methods return.
 pub fn call(expr: &str) -> Result<u64> {
+    // The proc file holds one pending result: a write and the read that
+    // follows must not interleave with another thread's call.
+    static LOCK: Mutex<()> = Mutex::new(());
+    let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
     fs::write(PROC, expr).with_context(|| format!("writing {PROC} (root + acpi_call needed)"))?;
     let raw = fs::read(PROC).with_context(|| format!("reading {PROC}"))?;
     let out = String::from_utf8_lossy(&raw);
