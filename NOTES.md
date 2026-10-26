@@ -143,9 +143,29 @@ level (1 step per ~3 s); level-1 indexes the duty/target rows; the EC starts
 from the duty entry and trims it until the tach matches the target entry.
 The **tach target is the real setpoint.**
 
-Still open: rows 0x0A10, 0x0A30, 0x0A90/0x0AB0; whether threshold rows are
-also live (fan0 idle threshold test ran at level 0, so it proved nothing);
-what resets the tables (profile switch, resume, AC change?).
+6. **Threshold rows are live.** fan0 up row 0x0A00 -> 40..52, down row
+   0x0A20 -> 35..47 (stock duty/targets).
+   - Idle, temp flat at 47 °C for 30+ s: level stayed 0 for 45 s.
+   - Light load, temp wobbling 45-47 °C: 9 s after the write fan0 jumped
+     **level 0 -> 8 in one step** (= number of up thresholds <= 47), started
+     spinning ~9 s later at **46 °C** and ramped 500 -> 1350 RPM. Fan1 stayed
+     at level 0 -> 0x0A00/0x0A20 are fan0-only (fan1: 0x0A40/0x0A60).
+   - Working theory: the EC re-evaluates the level on temperature *changes*;
+     a flat reading doesn't trigger it.
+7. 2-core load reached 92 °C in 12 s; stock fan0 then sat at 0 RPM for 12+ s
+   at level 13 (max) and needed ~45 s to reach 1800 RPM. Level can jump
+   several steps at once when hot (1 -> 3 -> 6 -> 13 in 9 s).
+
+**Level semantics:** level = number of up thresholds the control temp has
+passed (0-13), held until it falls below the matching down threshold. Level 13
+exists (all 13 thresholds passed) and uses entry 12.
+
+**Fan behaviour on start:** ~9 s spin-up delay after leaving the off state,
+then ramps ~+100 RPM / 3 s (EC slew limit) — even towards a far target.
+Rows 0x0A10 / 0x0A30 (unknown) may be timing / slew parameters.
+
+Still open: rows 0x0A10, 0x0A30, 0x0A90/0x0AB0; what resets the tables
+(profile switch for sure; resume, AC change?).
 
 Superseded hypothesis: "EC copies tables on a trigger" — wrong for fan1.
 
