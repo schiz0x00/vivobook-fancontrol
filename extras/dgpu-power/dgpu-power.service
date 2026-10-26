@@ -1,0 +1,11 @@
+[Unit]
+Description=Power off NVIDIA dGPU on battery
+After=systemd-udev-settle.service systemd-udev-trigger.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/dgpu-power auto
+SuccessExitStatus=1
+
+[Install]
+WantedBy=multi-user.target

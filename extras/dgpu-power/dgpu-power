@@ -1,0 +1,79 @@
+#!/bin/sh
+# Cut power to the NVIDIA dGPU on battery, bring it back on AC.
+#
+# The dGPU's power rail is an ACPI power resource on its PCIe root port
+# (\_SB_.PC00.RP12). Runtime PM already switches it off when the GPU idles,
+# but anything probing the GPU (Vulkan/GL enumeration, HDMI polling) wakes
+# it up again. On battery we remove the GPU from the PCI bus instead, so the
+# empty root port stays in D3cold with the rail off until a rescan on AC.
+#
+# Usage: dgpu-power [auto|on|off|status]   (default: auto = follow AC state)
+set -u
+
+GPU=0000:01:00.0
+AUDIO=0000:01:00.1
+PORT=0000:00:01.0
+SYS=/sys/bus/pci/devices
+
+log() { echo "dgpu-power: $*"; logger -t dgpu-power -- "$*" 2>/dev/null || true; }
+
+on_ac() {
+	for s in /sys/class/power_supply/*; do
+		[ "$(cat "$s/type" 2>/dev/null)" = Mains ] && [ "$(cat "$s/online" 2>/dev/null)" = 1 ] && return 0
+	done
+	return 1
+}
+
+# Processes other than the compositor holding the dGPU's DRM nodes.
+gpu_users() {
+	for pid in $(fuser /dev/dri/by-path/pci-$GPU-card /dev/dri/by-path/pci-$GPU-render 2>/dev/null); do
+		comm=$(cat /proc/$pid/comm 2>/dev/null) || continue
+		case "$comm" in
+			kwin_wayland|Xwayland) ;;
+			*) printf '%s(%s) ' "$comm" "$pid" ;;
+		esac
+	done
+}
+
+status() {
+	if [ -e $SYS/$GPU ]; then
+		echo "dGPU: present, $(cat $SYS/$GPU/power/runtime_status) ($(cat $SYS/$GPU/power_state 2>/dev/null))"
+	else
+		echo "dGPU: removed from PCI bus"
+	fi
+	echo "root port: $(cat $SYS/$PORT/power/runtime_status) ($(cat $SYS/$PORT/power_state 2>/dev/null))"
+	for r in $SYS/$PORT/firmware_node/power_resources_D0/*/resource_in_use; do
+		[ -e "$r" ] && echo "power rail: $([ "$(cat "$r")" = 1 ] && echo ON || echo OFF)"
+	done
+}
+
+mode=${1:-auto}
+if [ "$mode" = auto ]; then
+	if on_ac; then mode=on; else mode=off; fi
+fi
+
+case "$mode" in
+off)
+	[ -e $SYS/$GPU ] || { log "already off"; exit 0; }
+	users=$(gpu_users)
+	if [ -n "$users" ]; then
+		log "not removing dGPU, in use by: $users"
+		exit 1
+	fi
+	[ -e $SYS/$AUDIO ] && echo 1 > $SYS/$AUDIO/remove
+	echo 1 > $SYS/$GPU/remove
+	log "dGPU removed, power rail will be cut"
+	;;
+on)
+	[ -e $SYS/$GPU ] && { log "already on"; exit 0; }
+	echo 1 > $SYS/$PORT/rescan
+	log "dGPU rescanned, available on demand"
+	;;
+status)
+	status
+	;;
+*)
+	echo "usage: $0 [auto|on|off|status]" >&2
+	exit 2
+	;;
+esac

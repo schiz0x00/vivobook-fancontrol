@@ -1,0 +1,2 @@
+# Re-evaluate dGPU power when AC is plugged in or unplugged.
+SUBSYSTEM=="power_supply", ATTR{type}=="Mains", ACTION=="change", RUN+="/usr/bin/systemctl --no-block restart dgpu-power.service"
