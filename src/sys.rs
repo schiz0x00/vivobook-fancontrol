@@ -27,9 +27,7 @@ pub fn platform_profile() -> String {
 }
 
 pub fn profile_choices() -> Vec<String> {
-    read(PROFILE_CHOICES)
-        .map(|s| s.split_whitespace().map(str::to_owned).collect())
-        .unwrap_or_default()
+    read(PROFILE_CHOICES).map(|s| s.split_whitespace().map(str::to_owned).collect()).unwrap_or_default()
 }
 
 pub fn set_platform_profile(p: &str) -> Result<()> {
@@ -52,21 +50,17 @@ pub fn restore_tables() -> Result<()> {
 
 /// Package temperature from coretemp, in °C.
 pub fn cpu_temp() -> Option<f32> {
-    let dir = fs::read_dir("/sys/class/hwmon").ok()?.flatten().find(|e| {
-        read(e.path().join("name")).as_deref() == Some("coretemp")
-    })?;
+    let dir = fs::read_dir("/sys/class/hwmon")
+        .ok()?
+        .flatten()
+        .find(|e| read(e.path().join("name")).as_deref() == Some("coretemp"))?;
     read_num::<f32>(dir.path().join("temp1_input")).map(|m| m / 1000.0)
 }
 
 pub fn ac_online() -> bool {
-    fs::read_dir("/sys/class/power_supply")
-        .into_iter()
-        .flatten()
-        .flatten()
-        .any(|e| {
-            read(e.path().join("type")).as_deref() == Some("Mains")
-                && read(e.path().join("online")).as_deref() == Some("1")
-        })
+    fs::read_dir("/sys/class/power_supply").into_iter().flatten().flatten().any(|e| {
+        read(e.path().join("type")).as_deref() == Some("Mains") && read(e.path().join("online")).as_deref() == Some("1")
+    })
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -108,10 +102,7 @@ pub fn dgpu_power(action: &str) -> Result<String> {
     if !["on", "off", "auto"].contains(&action) {
         bail!("dgpu action must be on, off or auto");
     }
-    let out = Command::new(DGPU_SCRIPT)
-        .arg(action)
-        .output()
-        .with_context(|| format!("running {DGPU_SCRIPT}"))?;
+    let out = Command::new(DGPU_SCRIPT).arg(action).output().with_context(|| format!("running {DGPU_SCRIPT}"))?;
     let text = String::from_utf8_lossy(&out.stdout).into_owned() + &String::from_utf8_lossy(&out.stderr);
     if !out.status.success() {
         bail!("{DGPU_SCRIPT} {action} failed: {}", text.trim());

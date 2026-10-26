@@ -59,11 +59,7 @@ impl Presets {
     }
 
     pub fn names(&self) -> Vec<String> {
-        self.builtin
-            .iter()
-            .map(|(n, _)| n.clone())
-            .chain(self.user.iter().map(|(n, _)| format!("★ {n}")))
-            .collect()
+        self.builtin.iter().map(|(n, _)| n.clone()).chain(self.user.iter().map(|(n, _)| format!("★ {n}"))).collect()
     }
 
     pub fn get(&self, i: usize) -> Option<&Control> {

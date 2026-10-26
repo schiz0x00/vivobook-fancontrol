@@ -16,10 +16,7 @@ pub const ALL: [Mode; 4] = [Mode::Quiet, Mode::Normal, Mode::Cool, Mode::Max];
 fn curve(points: &[(u8, u32)], hysteresis: u8) -> Control {
     Control {
         fans: std::array::from_fn(|fan| FanMode::Curve {
-            points: points
-                .iter()
-                .map(|&(temp, rpm)| CurvePoint { temp, rpm: rpm.min(MAX_RPM[fan]) })
-                .collect(),
+            points: points.iter().map(|&(temp, rpm)| CurvePoint { temp, rpm: rpm.min(MAX_RPM[fan]) }).collect(),
             hysteresis,
         }),
     }

@@ -75,9 +75,15 @@ pub enum Request {
     /// Fresh read of the table block.
     Tables,
     /// Read any EC RAM range (max 0x1000 bytes).
-    ReadEc { addr: u16, len: u16 },
+    ReadEc {
+        addr: u16,
+        len: u16,
+    },
     /// Write table bytes; fans whose rows are touched switch to Manual.
-    WriteTable { addr: u16, bytes: Vec<u8> },
+    WriteTable {
+        addr: u16,
+        bytes: Vec<u8>,
+    },
     SetControl(Control),
     /// Store this control as the one applied at daemon start.
     SetBoot(Control),

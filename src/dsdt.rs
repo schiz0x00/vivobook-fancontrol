@@ -9,19 +9,11 @@ use std::fmt::Write as _;
 use anyhow::{Context, Result};
 use regex::Regex;
 
-pub const PROFILES: &[(&str, &str)] = &[
-    ("FSMD", "standard"),
-    ("FWMD", "whisper"),
-    ("FPMD", "perf"),
-    ("FFMD", "full"),
-];
+pub const PROFILES: &[(&str, &str)] = &[("FSMD", "standard"), ("FWMD", "whisper"), ("FPMD", "perf"), ("FFMD", "full")];
 
 fn method_body<'a>(lines: &'a [&'a str], name: &str) -> Result<&'a [&'a str]> {
     let header = format!("Method ({name},");
-    let start = lines
-        .iter()
-        .position(|l| l.contains(&header))
-        .with_context(|| format!("method {name} not found"))?;
+    let start = lines.iter().position(|l| l.contains(&header)).with_context(|| format!("method {name} not found"))?;
 
     let mut depth = 0i32;
     for (end, line) in lines.iter().enumerate().skip(start) {
@@ -53,10 +45,8 @@ fn wram_writes(body: &[&str]) -> BTreeMap<u16, u8> {
 /// that differ between profiles.
 pub fn fan_tables(dsl: &str) -> Result<String> {
     let lines: Vec<&str> = dsl.lines().collect();
-    let tables = PROFILES
-        .iter()
-        .map(|(method, _)| Ok(wram_writes(method_body(&lines, method)?)))
-        .collect::<Result<Vec<_>>>()?;
+    let tables =
+        PROFILES.iter().map(|(method, _)| Ok(wram_writes(method_body(&lines, method)?))).collect::<Result<Vec<_>>>()?;
     let addrs: BTreeSet<u16> = tables.iter().flat_map(|t| t.keys().copied()).collect();
 
     let mut out = String::from("addr  ");

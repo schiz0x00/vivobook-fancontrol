@@ -72,9 +72,7 @@ pub fn duty_for(fan: usize, rpm: u32) -> u8 {
 pub fn owner(addr: u16) -> Option<usize> {
     (0..2).find(|&f| {
         let r = ROWS[f];
-        [r.up, r.hyst, r.low, r.duty, r.unknown]
-            .iter()
-            .any(|&row| (row..row + 16).contains(&addr))
+        [r.up, r.hyst, r.low, r.duty, r.unknown].iter().any(|&row| (row..row + 16).contains(&addr))
             || (r.target..r.target + 32).contains(&addr)
     })
 }
@@ -222,7 +220,6 @@ impl FanMode {
         }
     }
 }
-
 
 /// A sensible starting curve: quiet until 55 °C, full by 90 °C.
 pub fn default_curve(fan: usize) -> Vec<CurvePoint> {

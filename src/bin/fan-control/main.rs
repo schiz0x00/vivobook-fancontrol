@@ -260,7 +260,9 @@ impl App {
             }
             Ok(rpm) => {
                 if rpm > MAX_RPM[0] {
-                    ui.label(RichText::new(format!("Fan 1 can only do {} rpm, so it will run at that.", MAX_RPM[0])).weak());
+                    ui.label(
+                        RichText::new(format!("Fan 1 can only do {} rpm, so it will run at that.", MAX_RPM[0])).weak(),
+                    );
                 }
                 let set = egui::Button::new(RichText::new(format!("Set {rpm} rpm")).size(18.0));
                 if ui.add(set.min_size(egui::vec2(160.0, 40.0))).clicked() {
@@ -317,7 +319,10 @@ impl App {
                 if ui.add(set.min_size(egui::vec2(160.0, 40.0))).clicked() {
                     let control = Control {
                         fans: std::array::from_fn(|f| FanMode::Curve {
-                            points: points.iter().map(|p| CurvePoint { temp: p.temp, rpm: clamp_rpm(f, p.rpm) }).collect(),
+                            points: points
+                                .iter()
+                                .map(|p| CurvePoint { temp: p.temp, rpm: clamp_rpm(f, p.rpm) })
+                                .collect(),
                             hysteresis: HYSTERESIS,
                         }),
                     };
@@ -368,10 +373,8 @@ impl App {
             let text = format!("Fans are changing speed… now {} and {} rpm", st.fans[0].rpm, st.fans[1].rpm);
             say(ui, &text, None);
         } else {
-            let text = format!(
-                "⚠ Fans only reached {} and {} rpm. Try another number.",
-                st.fans[0].rpm, st.fans[1].rpm
-            );
+            let text =
+                format!("⚠ Fans only reached {} and {} rpm. Try another number.", st.fans[0].rpm, st.fans[1].rpm);
             say(ui, &text, Some(WARN));
         }
     }

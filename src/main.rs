@@ -141,9 +141,7 @@ fn require_acpi_call() -> Result<()> {
 const PROFILE: &str = "/sys/firmware/acpi/platform_profile";
 
 fn platform_profile() -> String {
-    fs::read_to_string(PROFILE)
-        .map(|s| s.trim().to_owned())
-        .unwrap_or_else(|_| "?".into())
+    fs::read_to_string(PROFILE).map(|s| s.trim().to_owned()).unwrap_or_else(|_| "?".into())
 }
 
 fn main() -> Result<()> {
