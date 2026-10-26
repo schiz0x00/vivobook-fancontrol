@@ -2,7 +2,14 @@
 name = "vfc"
 version = "0.1.0"
 edition = "2024"
-
+rust-version = "1.95"
+description = "Fan control for the ASUS Vivobook Pro 15 (N6506MU) on Linux via the EC's own ACPI methods"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/schiz0x00/vivobook-fancontrol"
+readme = "README.md"
+keywords = ["asus", "vivobook", "fan", "ec", "acpi"]
+categories = ["hardware-support", "command-line-utilities"]
+publish = false
 [dependencies]
 anyhow = "1.0.104"
 clap = { version = "4.6.7", features = ["derive"] }

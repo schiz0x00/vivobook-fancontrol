@@ -1,1 +1,4 @@
 target/
+# Firmware dumps (ASUS/Intel copyright): dump your own, see NOTES.md.
+acpi/
+dist/
