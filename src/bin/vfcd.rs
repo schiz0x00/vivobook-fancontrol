@@ -35,14 +35,19 @@ static STOP: AtomicBool = AtomicBool::new(false);
 struct Config {
     boot: Control,
     guard: Guard,
-    /// Group allowed to use the socket.
+    /// Group allowed to use the socket (default: the admin group, sudo or wheel).
     group: String,
 }
 
 impl Default for Config {
     fn default() -> Self {
-        Self { boot: Control::default(), guard: Guard::default(), group: "sudo".into() }
+        Self { boot: Control::default(), guard: Guard::default(), group: default_group() }
     }
+}
+
+/// The distribution's admin group: sudo (Debian, Ubuntu) or wheel (Fedora, Arch).
+fn default_group() -> String {
+    ["sudo", "wheel"].into_iter().find(|g| group_id(g).is_some()).unwrap_or("sudo").into()
 }
 
 impl Config {
@@ -214,12 +219,11 @@ impl Loop {
         if verify {
             for (fan, mode) in modes.iter().enumerate() {
                 if let Some(want) = mode.table(fan)
-                    && self.enforce(fan, &want, force)? {
-                        d.lock().event(format!(
-                            "fan{fan}: firmware rewrote the tables (profile {}), re-applied",
-                            st.profile
-                        ));
-                    }
+                    && self.enforce(fan, &want, force)?
+                {
+                    d.lock()
+                        .event(format!("fan{fan}: firmware rewrote the tables (profile {}), re-applied", st.profile));
+                }
             }
         }
         if force || self.ticks.is_multiple_of(REFRESH_EVERY) || st.tables.is_empty() {
@@ -437,6 +441,7 @@ fn group_id(name: &str) -> Option<u32> {
 }
 
 fn main() -> Result<()> {
+    acpi_call::check_board()?;
     if !acpi_call::available() {
         let _ = std::process::Command::new("modprobe").arg("acpi_call").status();
     }

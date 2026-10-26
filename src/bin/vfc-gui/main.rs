@@ -356,8 +356,8 @@ impl App {
 
     fn dashboard(&mut self, ui: &mut Ui, st: &Status) {
         ui.columns(3, |cols| {
-            for fan in 0..2 {
-                fan_card(&mut cols[fan], st, fan);
+            for (fan, col) in cols.iter_mut().take(2).enumerate() {
+                fan_card(col, st, fan);
             }
             let ui = &mut cols[2];
             egui::Frame::group(ui.style()).show(ui, |ui| {
@@ -404,10 +404,10 @@ impl App {
             .y_axis_formatter(|m, _| format!("{:.0}°", m.value))
             .show(ui, |p| {
                 p.line(Line::new("CPU", series(&|s| s.cpu.map(f64::from))).color(CPU_COLOR));
-                for fan in 0..2 {
+                for (fan, &color) in FAN_COLOR.iter().enumerate() {
                     p.line(
                         Line::new(format!("EC fan{fan}"), series(&|s| Some(f64::from(s.temp[fan]))))
-                            .color(FAN_COLOR[fan])
+                            .color(color)
                             .style(LineStyle::dashed_dense()),
                     );
                 }
@@ -423,11 +423,11 @@ impl App {
             .default_x_bounds(-HISTORY_SECS, 0.0)
             .x_axis_formatter(|m, _| format!("{:.0}s", m.value))
             .show(ui, |p| {
-                for fan in 0..2 {
-                    p.line(Line::new(format!("fan{fan}"), series(&|s| Some(f64::from(s.rpm[fan])))).color(FAN_COLOR[fan]));
+                for (fan, &color) in FAN_COLOR.iter().enumerate() {
+                    p.line(Line::new(format!("fan{fan}"), series(&|s| Some(f64::from(s.rpm[fan])))).color(color));
                     p.line(
                         Line::new(format!("fan{fan} target"), series(&|s| s.target[fan].map(f64::from)))
-                            .color(FAN_COLOR[fan].gamma_multiply(0.6))
+                            .color(color.gamma_multiply(0.6))
                             .style(LineStyle::dashed_loose()),
                     );
                 }
@@ -460,17 +460,16 @@ impl App {
             ui.separator();
             let boot_same = st.boot == st.control;
             if ui
-                .add_enabled(!boot_same && !st.control.fans.contains(&FanMode::Manual), egui::Button::new("Use at boot"))
+                .add_enabled(
+                    !boot_same && !st.control.fans.contains(&FanMode::Manual),
+                    egui::Button::new("Use at boot"),
+                )
                 .on_hover_text("vfcd applies this control every time it starts")
                 .clicked()
             {
                 self.backend.send(Request::SetBoot(st.control.clone()), "save boot control");
             }
-            ui.weak(format!(
-                "boot: fan0 {}, fan1 {}",
-                st.boot.fans[0].label(),
-                st.boot.fans[1].label()
-            ));
+            ui.weak(format!("boot: fan0 {}, fan1 {}", st.boot.fans[0].label(), st.boot.fans[1].label()));
         });
 
         ui.horizontal(|ui| {
@@ -597,7 +596,14 @@ impl App {
             ui.checkbox(&mut self.ex_auto, "auto-refresh (2 s)");
         });
         if self.confirm_full_scan {
-            ui.colored_label(WARN, format!("Reading {} bytes takes ~{:.1} s — press Read again to confirm.", self.ex_len, f32::from(self.ex_len) * 0.0012));
+            ui.colored_label(
+                WARN,
+                format!(
+                    "Reading {} bytes takes ~{:.1} s — press Read again to confirm.",
+                    self.ex_len,
+                    f32::from(self.ex_len) * 0.0012
+                ),
+            );
         }
         ui.horizontal_wrapped(|ui| {
             ui.weak("jump:");
@@ -652,7 +658,8 @@ impl App {
                 for (c, b) in row.iter().enumerate() {
                     let i = r * 16 + c;
                     let addr = base + c;
-                    let recent = self.ex_changed.get(i).copied().flatten().is_some_and(|t| t.elapsed() < Duration::from_secs(6));
+                    let recent =
+                        self.ex_changed.get(i).copied().flatten().is_some_and(|t| t.elapsed() < Duration::from_secs(6));
                     let mut text = RichText::new(format!("{b:02x}")).monospace();
                     if recent {
                         text = text.color(Color32::BLACK).background_color(WARN);
@@ -696,9 +703,14 @@ impl App {
             let max_release = g.trip.saturating_sub(5);
             g.release = g.release.min(max_release);
             ui.add(egui::Slider::new(&mut g.release, 50..=max_release).text("release below (°C)"));
-            ui.weak("Uses the hottest of the CPU package and both EC control temperatures. Stock fans are never touched.");
+            ui.weak(
+                "Uses the hottest of the CPU package and both EC control temperatures. Stock fans are never touched.",
+            );
             if !g.enabled {
-                ui.colored_label(WARN, "Without the guard a low fixed speed under load relies on CPU throttling alone.");
+                ui.colored_label(
+                    WARN,
+                    "Without the guard a low fixed speed under load relies on CPU throttling alone.",
+                );
             }
             let changed = g != st.guard;
             let (mut save, mut revert) = (false, false);
@@ -746,6 +758,10 @@ impl App {
 
         section(ui, "NVIDIA dGPU", |ui| {
             ui.label(format!("state: {}", st.dgpu));
+            if !std::path::Path::new(vfc::sys::DGPU_SCRIPT).exists() {
+                ui.weak("Power control needs the optional dgpu-power script (extras/dgpu-power in the repo).");
+                return;
+            }
             ui.horizontal(|ui| {
                 for (a, tip) in [
                     ("auto", "Follow AC: on when plugged in, rail off on battery"),
@@ -757,13 +773,13 @@ impl App {
                     }
                 }
             });
-            ui.weak("Uses /usr/local/sbin/dgpu-power; refuses to remove the GPU while a program uses it. HDMI needs it on.");
+            ui.weak("Uses dgpu-power; refuses to remove the GPU while a program uses it. HDMI needs it on.");
         });
 
         section(ui, "Daemon", |ui| {
             ui.label(format!("EC read: {:.2} ms/byte", st.ec_read_ms));
             ui.label(format!("boot control: fan0 {}, fan1 {}", st.boot.fans[0].label(), st.boot.fans[1].label()));
-            ui.weak("Config: /etc/vfc/vfcd.json · socket /run/vfcd.sock (group sudo) · on stop vfcd restores the stock tables.");
+            ui.weak("Config: /etc/vfc/vfcd.json · socket /run/vfcd.sock (admin group) · on stop vfcd restores the stock tables.");
         });
     }
 }
@@ -823,7 +839,8 @@ fn fan_editor(ui: &mut Ui, fan: usize, d: &mut FanDraft, st: &Status) {
     ui.label(RichText::new(FAN_NAMES[fan]).strong().size(16.0).color(FAN_COLOR[fan]));
     ui.horizontal(|ui| {
         ui.selectable_value(&mut d.kind, Kind::Stock, "Stock").on_hover_text("Firmware curve of the platform profile");
-        ui.selectable_value(&mut d.kind, Kind::Fixed, "Fixed speed").on_hover_text("One speed, whatever the temperature");
+        ui.selectable_value(&mut d.kind, Kind::Fixed, "Fixed speed")
+            .on_hover_text("One speed, whatever the temperature");
         ui.selectable_value(&mut d.kind, Kind::Curve, "Curve").on_hover_text("Your own temperature → speed curve");
         if d.kind == Kind::Manual {
             ui.colored_label(WARN, "Manual (raw table edits) — pick a mode to take over");
@@ -1183,7 +1200,8 @@ fn log(ui: &mut Ui, st: &Status) {
         for (t, msg) in st.events.iter().rev() {
             let secs = now_secs() as u64 - t.min(&(now_secs() as u64));
             ui.weak(ago(secs));
-            let color = if msg.starts_with("error") || msg.starts_with("guard:") { BAD } else { ui.visuals().text_color() };
+            let color =
+                if msg.starts_with("error") || msg.starts_with("guard:") { BAD } else { ui.visuals().text_color() };
             ui.colored_label(color, msg);
             ui.end_row();
         }
