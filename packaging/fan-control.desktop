@@ -5,6 +5,6 @@ GenericName=Vivobook Fan Control
 Comment=Make the laptop quieter or cooler
 Exec=/usr/local/bin/fan-control
 Icon=preferences-system-power
-Categories=System;Utility;
+Categories=System;Monitor;
 Keywords=fan;fans;vivobook;asus;vfc;temperature;quiet;cool;noise;speed;curve;
 StartupWMClass=fan-control
