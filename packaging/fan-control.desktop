@@ -1,9 +1,10 @@
 [Desktop Entry]
 Type=Application
 Name=Fan Control
+GenericName=Vivobook Fan Control
 Comment=Make the laptop quieter or cooler
 Exec=/usr/local/bin/fan-control
 Icon=preferences-system-power
-Categories=System;Settings;HardwareSettings;
-Keywords=fan;temperature;quiet;cool;noise;
+Categories=System;Utility;
+Keywords=fan;fans;vivobook;asus;vfc;temperature;quiet;cool;noise;speed;curve;
 StartupWMClass=fan-control
