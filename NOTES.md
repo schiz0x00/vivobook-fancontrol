@@ -1,7 +1,51 @@
-# ASUS Vivobook Pro 15 N6506MU — EC fan control RE notes
+# ASUS Vivobook Pro 15 N6506MU — EC fan control reverse-engineering notes
 
-BIOS: N6506MU.313 (2025-10-13). Tables in `acpi/tables/`, decompiled with `iasl -d DSDT`
-(combined `-e SSDT*` fails on a duplicate `_UPC` object).
+A lab notebook: sections are in the order things were found, and early
+hypotheses are kept (and marked) where later tests overturned them. The
+summary below is the current understanding; `src/tables.rs` is the code
+version of it.
+
+BIOS: N6506MU.313 (2025-10-13).
+
+## Summary
+
+- **Access:** EC RAM through the firmware's own mailbox methods
+  `\_SB.PC00.LPCB.EC0.RRAM addr` / `WRAM addr value`, called via the
+  `acpi_call` module (~1.2–1.3 ms per byte). Secure Boot can stay on.
+- **Fan state:** tach words 0x03E8 (fan0) / 0x03EA (fan1), u16 LE,
+  RPM = 934401 / tach (the firmware's own `FS_C` gets this wrong).
+  Level 0x03EC / 0x03ED, control temperature 0x0576 / 0x0577.
+- **Tables:** 0x0A00–0x0AFF, rewritten by the firmware on every
+  platform_profile switch, and read **live** by the EC. Per fan, 13 levels:
+
+  | Row (fan0 / fan1)     | Meaning |
+  |-----------------------|---------|
+  | 0x0A00 / 0x0A40       | up threshold °C: level = number of thresholds passed |
+  | 0x0A10 / 0x0A50       | hysteresis: level L drops below `up[L-1] - hyst[L-1]` |
+  | 0x0A20 / 0x0A60       | unknown, but 0 here breaks levels (never write 0) |
+  | 0x0A30 / 0x0A70       | unknown (9, 2, 2, ...; maybe a drop delay) |
+  | 0x0A80 / 0x0AA0       | duty per level: where the EC starts, then trims |
+  | 0x0AC0 / 0x0AE0       | 13 × u16 LE tach target per level: the real setpoint |
+
+  Level N uses entry N−1; level 0 means the fan stops.
+- **Timing:** the EC only re-evaluates levels when the temperature changes;
+  drops lag 20–30 s; speed changes slew at roughly 30 rpm/s.
+- **Limits used:** fan0 ≤ 2700 rpm, fan1 ≤ 3200 rpm (about the firmware's
+  own "full" profile), ≥ 500 rpm when running.
+
+## Dumping the ACPI tables yourself
+
+The firmware tables are not in this repository (they are ASUS firmware).
+To read along with the method names below:
+
+```sh
+mkdir -p acpi/tables && cd acpi/tables
+sudo sh -c 'for t in /sys/firmware/acpi/tables/DSDT /sys/firmware/acpi/tables/SSDT*; do cat $t > ${t##*/}; done'
+sudo chown "$USER" * && iasl -d DSDT     # iasl is in the acpica-tools package
+```
+
+(`iasl -e SSDT* -d DSDT` fails on a duplicate `_UPC` object; disassemble
+DSDT alone.) `vfc extract` reads `acpi/tables/DSDT.dsl` by default.
 
 ## EC access
 
@@ -82,14 +126,16 @@ Whisper caps everything from level 6 up; performance/full raise the top levels.
 | 0x0AC0 | 13 x u16 LE: 0 0 0 0 829 719 653 599 553.. | **tach targets per level, fan0** (same unit as 0x03E8; matched live) |
 | 0x0AE0 | 13 x u16 LE: 770 719 653 616 616 616 599 513.. | **tach targets per level, fan1** |
 
-Confirmed live: 0x0A00 = up thresholds (°C), 0x0A20 = down thresholds (°C),
+Confirmed live: 0x0A00 = up thresholds (°C), 0x0A20 = down thresholds (°C) (later: wrong, see 9),
 0x0A80/0x0AA0 = duty per level, 0x0AC0/0x0AE0 = tach targets per level.
 Still unknown: 0x0A10 (10..19), 0x0A30 (9,2,2..), 0x0A90/0x0AB0 (1 1 2 3 x4).
 
-All hypotheses — to be confirmed by live reads (RRAM) while switching profiles
-and loading the CPU.
+(Hypotheses from the first read-only pass; see the summary for what held up.)
 
-## Write experiments (2026-10-26) — EC does NOT pick up table edits live
+## Write experiments (2026-10-26)
+
+Tests 1–3 looked like the EC ignores table edits; tests 4–5 showed it reads
+them live and the early tests had simply stayed at level 0 (no entry used).
 
 All writes via WRAM, read back OK, undone with `vfc restore` (profile toggle
 makes FANL rewrite everything).
@@ -181,7 +227,7 @@ Next tests:
 - `\_SB.ATKD.AGPU` / `RGPU`: ASUS dGPU attach/eject helpers (RP12.AGON, Notify
   PXSX eject). Possibly a firmware dGPU power path not exposed by asus-wmi.
 
-## Plan
+## Plan (done)
 
 1. acpi_call (DKMS, signed with a new MOK) -> call RRAM/WRAM/FS_C from userspace.
    Works with Secure Boot ON (signed module; lockdown only blocks unsigned code,
@@ -214,6 +260,12 @@ Next tests:
     for 1300). Starting from a running fan, the EC reached a new target in
     3-6 s; the ~100 rpm/3 s ramp seen earlier was from standstill.
 12. EC reads through acpi_call: ~1.2-1.3 ms per byte (256-byte table ~0.3 s).
+13. **Speed changes are slow and level drops need a temperature change.**
+    Fixed 1800 rpm from full speed: 3150 -> 1830 rpm in ~50 s (~30 rpm/s),
+    then held 1828 / 1807. Switching from fixed (level 13) to a curve whose
+    first point was 30 °C at 33 °C flat: stayed at level 13 until the
+    temperature moved 1 °C (~70 s), then dropped straight to level 1 and held
+    1509 / 1487 for 1500.
 
 Encoding used by vfcd (src/tables.rs): fixed = up 20 / hyst 10 / low 10 on
 all levels; curve point k -> up[k] = max(temp, 20), hyst[k] = hysteresis,
