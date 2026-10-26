@@ -17,7 +17,10 @@ the firmware's own EC mailbox methods (`RRAM`/`WRAM` via `acpi_call`).
   when stopped, and serves a socket (`/run/vfcd.sock`, group `sudo`).
 - **fan-control** — the simple app ("Fan Control" in the app menu): the
   temperature and four big buttons — Quiet, Normal (factory), Cool, Max.
-  A click applies the mode and keeps it after a restart.
+  A click applies the mode and keeps it after a restart. "My speed" takes one
+  rpm (500–3200, checked against the real fans afterwards); "My curve" takes
+  up to 8 "at X °C run Y rpm" lines (30–90 °C, speeds may not drop as it gets
+  hotter). `fan-control speed|curve` opens with that form unfolded.
 - **vfc-gui** — the advanced app (not in the menu; run `vfc-gui`):
   - Dashboard: live RPM / target / level / duty per fan, CPU + EC temps,
     10-minute graphs.
